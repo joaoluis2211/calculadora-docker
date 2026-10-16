@@ -1,0 +1,8 @@
+services:
+  calculadora-app:
+    build: .
+    image: ${DOCKER_USER:-local}/calculadora-docker:${GITHUB_SHA:-latest}
+
+  servico-vizinho:
+    image: alpine
+    command: sleep infinity

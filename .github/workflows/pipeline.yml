@@ -8,9 +8,12 @@ on:
 permissions:
   contents: read
 
+env:
+  DOCKER_USER: ${{ vars.DOCKER_USER }}
+
 jobs:
   build:
-    name: Build da imagem
+    name: Build com Compose
     runs-on: ubuntu-latest
 
     steps:
@@ -23,28 +26,43 @@ jobs:
           username: ${{ vars.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PASS }}
 
-      - name: Construir e enviar imagem
-        run: |
-          docker build -t "$DOCKER_USER/calculadora-docker:$GITHUB_SHA" .
-          docker push "$DOCKER_USER/calculadora-docker:$GITHUB_SHA"
-        env:
-          DOCKER_USER: ${{ vars.DOCKER_USER }}
+      - name: Construir imagem
+        run: docker compose build
+
+      - name: Enviar imagem da calculadora
+        run: docker compose push calculadora-app
 
   test:
-    name: Testes no container
+    name: Testes com Compose
     needs: build
     runs-on: ubuntu-latest
 
     steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
       - name: Login no Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ vars.DOCKER_USER }}
           password: ${{ secrets.DOCKER_PASS }}
 
-      - name: Baixar imagem e executar testes
-        run: |
-          docker pull "$DOCKER_USER/calculadora-docker:$GITHUB_SHA"
-          docker run --rm "$DOCKER_USER/calculadora-docker:$GITHUB_SHA" python -m unittest -v
-        env:
-          DOCKER_USER: ${{ vars.DOCKER_USER }}
+      - name: Baixar imagens
+        run: docker compose pull
+
+      - name: Subir ambiente
+        run: docker compose up -d --no-build
+
+      - name: Testar comunicação
+        run: docker compose exec -T calculadora-app ping -c 4 servico-vizinho
+
+      - name: Executar testes unitários
+        run: docker compose exec -T calculadora-app python -m unittest -v
+
+      - name: Mostrar logs em caso de falha
+        if: failure()
+        run: docker compose logs
+
+      - name: Encerrar ambiente
+        if: always()
+        run: docker compose down
